@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef} from 'react';
 import { getWebContainerInstance } from './webContainerInstance';
 import CodeEditor from './components/CodeEditor';
+import { executeCode } from './execution/codeExecutor';
 
 function App() {
   const [language, setLanguage] = useState<'javascript' | 'typescript'>('typescript');
@@ -49,8 +50,8 @@ function App() {
                 contents: `{
                   "name": "code-runner",
                   "type": "commonjs",
-                  "dependencies": {
-                    "typescript": "^5.0.0"
+                  "devDependencies": {
+                    "typescript": "^5.0.0" 
                   }
                 }`,
               },
@@ -80,78 +81,8 @@ function App() {
     };
   }, []);
 
-  const stripAnsiCodes = (str: string): string => {
-    // eslint-disable-next-line no-control-regex
-    return str.replace(/\u001b\[\d+m/g, '');
-  };
-
-  const executeJavaScript = async (code: string) => {
-    try {
-      const webContainerInstance = webContainerInstanceRef.current;
-      await webContainerInstance.fs.writeFile('index.js', code);
-      const process = await webContainerInstance.spawn('node', ['index.js']);
-
-      let output = '';
-      process.output.pipeTo(
-        new WritableStream({
-          write(data) {
-            const cleanData = stripAnsiCodes(data);
-            output += cleanData;
-            setConsoleOutput(output);
-          }
-        })
-      );
-
-      await process.exit;
-    } catch (error) {
-      const err = error as Error;
-      setConsoleOutput('Execution Error: ' + err.message);
-    }
-  };
-
-  const executeTypeScript = async (code: string) => {
-    try {
-      const webContainerInstance = webContainerInstanceRef.current;
-      await webContainerInstance.fs.writeFile('index.ts', code);
-
-      // Compile TypeScript
-      const tscProcess = await webContainerInstance.spawn('npx', ['tsc', 'index.ts']);
-      await tscProcess.exit;
-
-      // Execute compiled JavaScript
-      const nodeProcess = await webContainerInstance.spawn('node', ['index.js']);
-
-      let output = '';
-      nodeProcess.output.pipeTo(
-        new WritableStream({
-          write(data) {
-            const cleanData = stripAnsiCodes(data);
-            output += cleanData;
-            setConsoleOutput(output);
-          }
-        })
-      );
-
-      await nodeProcess.exit;
-    } catch (error) {
-      const err = error as Error;
-      setConsoleOutput('Execution Error: ' + err.message);
-    }
-  };
-
-  const executeCode = async () => {
-    setConsoleOutput('');
-    const webContainerInstance = webContainerInstanceRef.current;
-    if (!webContainerInstance) {
-      setConsoleOutput('WebContainer not initialized');
-      return;
-    }
-
-    if (language === 'javascript') {
-      await executeJavaScript(code);
-    } else {
-      await executeTypeScript(code);
-    }
+  const handleExecuteCode = async () => {
+    await executeCode(language, code, setConsoleOutput);
   };
 
   return (
@@ -185,14 +116,14 @@ function App() {
         />
 
         <button
-          onClick={executeCode}
+          onClick={handleExecuteCode}
           disabled={isLoading}
           className={`mt-4 ${isLoading
             ? 'bg-gray-500'
             : 'bg-blue-500 hover:bg-blue-700'
             } text-white font-bold py-2 px-4 rounded`}
         >
-          {isLoading ? 'Initializing...' : 'Run Code'}
+          {isLoading ? 'Loading...' : 'Run Code'}
         </button>
 
         <div className="mt-6 bg-gray-800 text-green-400 p-4 rounded-md">
