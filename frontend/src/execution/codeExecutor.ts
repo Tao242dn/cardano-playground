@@ -1,10 +1,29 @@
 import { getWebContainerInstance } from '../webContainerInstance';
 import { stripAnsiCodes } from '../utils/stringUtils';
+import ts from 'typescript';
+
+// Compile TypeScript code to JavaScript
+const compileTypeScript = (code: string) => {
+  try {
+    const result = ts.transpileModule(code, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+        noImplicitAny: false,
+        removeComments: true
+      },
+    });
+    return result.outputText;
+  } catch (error) {
+    return (error as Error).message;
+  }
+};
 
 // Function to execute JavaScript code
 const executeJavaScript = async (
   code: string,
-  setConsoleOutput: (output: string) => void
+  setConsoleOutput: (output: string) => void,
+  setExecutionStatus: (status: 'success' | 'error' | null) => void
 ) => {
   try {
     const webContainerInstance = await getWebContainerInstance();
@@ -23,9 +42,11 @@ const executeJavaScript = async (
     );
 
     await process.exit;
+    setExecutionStatus('success');
   } catch (error) {
     const err = error as Error;
     setConsoleOutput('Execution Error: ' + err.message);
+    setExecutionStatus('error');
   }
 };
 
@@ -33,7 +54,8 @@ const executeJavaScript = async (
 export const executeCode = async (
   language: 'javascript' | 'typescript',
   code: string,
-  setConsoleOutput: (output: string) => void
+  setConsoleOutput: (output: string) => void,
+  setExecutionStatus: (status: 'success' | 'error' | null) => void
 ) => {
   setConsoleOutput('');
   const webContainerInstance = await getWebContainerInstance();
@@ -43,18 +65,12 @@ export const executeCode = async (
   }
 
   if (language === 'javascript') {
-    await executeJavaScript(code, setConsoleOutput);
+    await executeJavaScript(code, setConsoleOutput, setExecutionStatus);
   } else {
-    // Send TypeScript code to server for compilation
-    const response = await fetch('https://compile-code-playground-tao242dn-tao242dns-projects.vercel.app/api/compile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await response.json();
-    const jsCode = data.jsCode;
+    // Compile TypeScript code to JavaScript
+    const jsCode = compileTypeScript(code);
 
     // Execute the compiled JavaScript code
-    await executeJavaScript(jsCode, setConsoleOutput);
+    await executeJavaScript(jsCode, setConsoleOutput, setExecutionStatus);
   }
 };

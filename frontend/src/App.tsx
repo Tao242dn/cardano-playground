@@ -1,16 +1,51 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useRef} from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getWebContainerInstance } from './webContainerInstance';
 import CodeEditor from './components/CodeEditor';
 import { executeCode } from './execution/codeExecutor';
+import { copyCode } from './utils/copyCode';
 
 function App() {
-  const [language, setLanguage] = useState<'javascript' | 'typescript'>('typescript');
-  const [code, setCode] = useState<string>('');
+  const [language, setLanguage] = useState<'javascript' | 'typescript'>(() => {
+    try {
+      const savedLanguage = sessionStorage.getItem('language');
+      if (savedLanguage === 'javascript' || savedLanguage === 'typescript') {
+        return savedLanguage;
+      }
+    } catch (error) {
+      console.error('Error reading language from sessionStorage:', error);
+    }
+    return 'typescript';
+  });
+
+  const [code, setCode] = useState<string>(() => {
+    const savedCode = sessionStorage.getItem('code');
+    return savedCode !== null ? savedCode : '';
+  });
+
   const [consoleOutput, setConsoleOutput] = useState<string>(''); // State for console output
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [executionStatus, setExecutionStatus] = useState<'success' | 'error' | null>(null);
+  const [copySuccess, setCopySuccess] = useState<string>('');
   const webContainerInstanceRef = useRef<any>(null);
 
+  // Debounced save of code to SessionStorage
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      sessionStorage.setItem('code', code);
+    }, 500); // Adjust the delay as needed
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [code]);
+
+  // Save language to SessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('language', language);
+  }, [language]);
+
+  // Initialize WebContainer
   useEffect(() => {
     let isMounted = true;
 
@@ -31,40 +66,10 @@ function App() {
                 contents: '',
               },
             },
-            'tsconfig.json': {
-              file: {
-                contents: `{
-                  "compilerOptions": {
-                    "target": "es2020",
-                    "module": "commonjs",
-                    "strict": true,
-                    "esModuleInterop": true,
-                    "skipLibCheck": true,
-                    "forceConsistentCasingInFileNames": true
-                  }
-                }`,
-              },
-            },
-            'package.json': {
-              file: {
-                contents: `{
-                  "name": "code-runner",
-                  "type": "commonjs",
-                  "devDependencies": {
-                    "typescript": "^5.0.0" 
-                  }
-                }`,
-              },
-            },
           };
 
           await webContainerInstance.mount(files);
           console.log('Files mounted successfully');
-
-          // Install dependencies
-          const installProcess = await webContainerInstance.spawn('npm', ['install']);
-          await installProcess.exit;
-          console.log('Dependencies installed successfully');
         } else {
           console.log('Files already mounted');
         }
@@ -82,7 +87,12 @@ function App() {
   }, []);
 
   const handleExecuteCode = async () => {
-    await executeCode(language, code, setConsoleOutput);
+    setExecutionStatus(null);
+    await executeCode(language, code, setConsoleOutput, setExecutionStatus);
+  };
+
+  const handleCopyCode = async () => {
+    await copyCode(code, setCopySuccess);
   };
 
   return (
@@ -115,18 +125,36 @@ function App() {
           theme="vs-dark"
         />
 
-        <button
-          onClick={handleExecuteCode}
-          disabled={isLoading}
-          className={`mt-4 ${isLoading
-            ? 'bg-gray-500'
-            : 'bg-blue-500 hover:bg-blue-700'
-            } text-white font-bold py-2 px-4 rounded`}
-        >
-          {isLoading ? 'Loading...' : 'Run Code'}
-        </button>
+        <div className="flex space-x-4">
+          <button
+            onClick={handleExecuteCode}
+            disabled={isLoading}
+            className={`mt-4 ${isLoading ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-700'
+              } text-white font-bold py-2 px-4 rounded`}
+          >
+            {isLoading ? 'Run...' : (
+              <div>
+                Run <i className="fa-solid fa-gears"></i>
+              </div>
+            )}
+          </button>
+          <button
+            onClick={handleCopyCode}
+            className="mt-4 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Copy <i className="fa-solid fa-copy"></i>
+          </button>
+        </div>
+        {copySuccess && <p className="text-green-500 mt-2">{copySuccess}</p>}
 
-        <div className="mt-6 bg-gray-800 text-green-400 p-4 rounded-md">
+        <div
+          className={`mt-6 p-4 rounded-md transition-all duration-200 ${executionStatus === 'success'
+            ? 'bg-gray-800 text-gray-200'
+            : executionStatus === 'error'
+              ? 'bg-red-400 text-red-800'
+              : 'bg-gray-800 text-gray-200'
+            }`}
+        >
           <h3 className="text-lg font-semibold mb-2">Console Output</h3>
           <pre className="whitespace-pre-wrap">{consoleOutput}</pre>
         </div>
