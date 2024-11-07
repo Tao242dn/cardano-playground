@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
-
 interface CodeEditorProps {
     value: string;
     onChange: (value: string) => void;
@@ -79,9 +78,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }, [language]); // Trigger when language changes
 
     return (
-        <div className="rounded-lg overflow-hidden border border-gray-700 shadow-lg bg-[#1e1e1e] h-[calc(100vh-8rem)]">
+        <div className="rounded-lg overflow-hidden border border-gray-800 shadow-lg bg-[#1e1e1e] h-[calc(100vh-8rem)]">
+            <div className="h-8 px-4 flex items-center space-x-2 border-b border-gray-800">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
             <MonacoEditor
-                height="100%"
+                height="calc(100% - 2rem)"
                 width="100%"
                 defaultValue={defaultString}
                 language={language}
@@ -93,15 +97,18 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                     fontSize: 14,
                     automaticLayout: true,
                     padding: { top: 30 },
+                    scrollbar: { verticalScrollbarSize: 0 },
                     scrollBeyondLastLine: false,
                     smoothScrolling: true,
                     cursorBlinking: 'smooth',
                     cursorSmoothCaretAnimation: "on",
                     formatOnPaste: true,
                     formatOnType: true,
+                    quickSuggestions: true,
                 }}
             />
         </div>
+
     );
 };
 
