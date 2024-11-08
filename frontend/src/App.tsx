@@ -1,12 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef } from 'react';
+import { BrowserWallet } from '@meshsdk/core';
 import { Resizable } from 're-resizable';
 import { getWebContainerInstance } from './webContainerInstance';
 import CodeEditor from './components/CodeEditor';
 import Footer from './components/Footer';
 import { executeCode } from './execution/codeExecutor';
-import { copyCode } from './utils/copyCode';
+import { copyCode, copyWalletAddress } from './utils/copy';
 import examples from './data/examples';
+
+// Define global if necessary
+if (typeof global === 'undefined') {
+  window.global = window;
+}
 
 function App() {
   const [language, setLanguage] = useState<'javascript' | 'typescript'>(() => {
@@ -31,6 +37,10 @@ function App() {
   const [executionStatus, setExecutionStatus] = useState<'success' | 'error' | null>(null);
   const [copySuccess, setCopySuccess] = useState<string>('');
   const [editorWidth, setEditorWidth] = useState<number>(window.innerWidth * 0.6);
+  const [connectedWallet, setConnectedWallet] = useState<BrowserWallet | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const webContainerInstanceRef = useRef<any>(null);
 
   // Debounced save of code to SessionStorage
@@ -99,6 +109,10 @@ function App() {
     await copyCode(code, setCopySuccess);
   };
 
+  const handleCopyWalletAddress = async () => {
+    await copyWalletAddress(walletAddress, setCopySuccess);
+  };
+
   const handleLoadExample = (example: any) => {
     setCode(example.code);
     setLanguage(example.language);
@@ -106,6 +120,45 @@ function App() {
     setExecutionStatus(null);
     sessionStorage.setItem('code', example.code);
     sessionStorage.setItem('language', example.language);
+  };
+
+  const connectWallet = async () => {
+    try {
+      const walletList = await BrowserWallet.getAvailableWallets();
+      if (walletList.length > 0) {
+        const walletName = walletList[0].name;
+        const wallet = await BrowserWallet.enable(walletName);
+        console.log(walletName)
+        setConnectedWallet(wallet);
+
+        const usedAddresses = await wallet.getRewardAddresses();
+        const address = usedAddresses[0];
+        console.log(address);
+        setWalletAddress(address);
+
+        const balanceHex = await wallet.getBalance();
+        console.log(balanceHex[0].quantity)
+
+        const adaBalance = parseInt(balanceHex[0].quantity) / 1_000_000;
+        setWalletBalance(adaBalance);
+      } else {
+        alert('No browser wallets found. Please install a Cardano wallet extension.');
+      }
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      setErrorMessage('Failed to connect to wallet. Please try again.');
+      setTimeout(() => setErrorMessage(''), 2000);
+    }
+  }
+  const disconnectWallet = () => {
+    setConnectedWallet(null);
+    setWalletAddress('');
+    setWalletBalance(null);
+  };
+
+  const shortenAddress = (address: string) => {
+    if (!address) return '';
+    return `${address.slice(0, 15)}...${address.slice(-5)}`;
   };
 
   return (
@@ -175,9 +228,52 @@ function App() {
               <i className="fas fa-cog"></i>
               <span>Settings</span>
             </button>
+
+            {/* Add Connect Wallet */}
+            {connectedWallet ? (
+              <div
+                className="relative group"
+                onClick={handleCopyWalletAddress}
+              >
+                <div className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg cursor-pointer transition-colors duration-200">
+                  <i className="fas fa-wallet text-indigo-400"></i>
+                  <div className="text-sm">
+                    <div className="font-semibold text-white">
+                      {shortenAddress(walletAddress)}
+                    </div>
+                    <div className="text-gray-300">{walletBalance?.toFixed(2)} ADA</div>
+                  </div>
+                </div>
+                {/* Disconnect Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering the copy function
+                    disconnectWallet();
+                  }}
+                  className="absolute top-0 right-0 mt-1 mr-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={connectWallet}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium 
+                  transition-all duration-200 flex items-center space-x-2"
+              >
+                <i className="fas fa-wallet"></i>
+                <span>Connect Wallet</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* {errorMessage && (
+        <div className="p-4 bg-red-600 text-white">
+          <p>{errorMessage}</p>
+        </div>
+      )} */}
 
       {/* Body */}
       <main className="flex flex-1 h-[calc(100vh-8rem)] overflow-hidden">
@@ -224,7 +320,19 @@ function App() {
       {copySuccess && (
         <div className="fixed bottom-4 right-4 animate-fade-in animate-slide-in-from-bottom">
           <div className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium">
-            {copySuccess}
+            <p>
+              <i className="fas fa-check mr-2"></i>{copySuccess}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="fixed bottom-4 right-4 animate-fade-in animate-slide-in-from-bottom">
+          <div className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium">
+            <p>
+              <i className="fas fa-exclamation-triangle mr-2"></i>{errorMessage}
+            </p>
           </div>
         </div>
       )}
