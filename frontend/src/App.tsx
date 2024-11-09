@@ -177,13 +177,13 @@ function App() {
       console.log('Wallet address:', address);
       setWalletAddress(address);
 
-      const balanceHex = await wallet.getBalance();
-      if (!balanceHex || balanceHex.length === 0) {
+      const balance = await wallet.getBalance();
+      if (!balance || balance.length === 0) {
         throw new Error('Failed to get balance');
       }
 
-      console.log('Balance hex:', balanceHex[0].quantity);
-      const adaBalance = parseInt(balanceHex[0].quantity) / 1_000_000;
+      console.log('Balance hex:', balance[0].quantity);
+      const adaBalance = parseInt(balance[0].quantity) / 1_000_000;
       setWalletBalance(adaBalance);
 
     } catch (error) {
@@ -214,7 +214,7 @@ function App() {
             <div className="flex justify-end">
               {/* Wallet Connection */}
               {connectedWallet ? (
-                <div className="relative group">
+                <div className="flex items-center space-x-3">
                   <div
                     onClick={handleCopyWalletAddress}
                     className="flex items-center space-x-3 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200"
@@ -230,32 +230,29 @@ function App() {
                   </div>
 
                   {/* Disconnect Dropdown */}
-                  <div className="absolute right-0 mt-2 w-48 py-2 bg-gray-800 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
-                    <button
-                      onClick={disconnectWallet}
-                      className="w-full px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center space-x-2"
-                    >
-                      <i className="fas fa-sign-out-alt"></i>
-                      <span>Disconnect Wallet</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <i className="fas fa-sign-out-alt"></i>
+                    <span>Disconnect Wallet</span>
+                  </button>
                 </div>
               ) : (
                 <div className="relative">
                   <button
                     onClick={() => setShowWalletList(!showWalletList)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium 
-                     transition-all duration-200 flex items-center space-x-2"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
                   >
                     <i className="fas fa-wallet"></i>
                     <span>Connect Wallet</span>
                   </button>
 
                   {/* Wallet List Dropdown */}
-                  {showWalletList && (
+                  {/* {showWalletList && (
                     <div
                       ref={walletDropdownRef}
-                      className="absolute right-0 mt-2 w-64 py-2 bg-cyan-900 rounded-lg shadow-xl z-50"
+                      className="absolute right-0 mt-2 w-64 bg-slate-600 rounded-lg shadow-lg transition-transform transform scale-95 opacity-100 duration-200 ease-in-out z-50"
                     >
                       {availableWallets.map((wallet) => (
                         <button
@@ -273,6 +270,23 @@ function App() {
                             className="w-6 h-6 rounded-full"
                           />
                           <span className="text-sm font-bold text-gray-200">{wallet.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )} */}
+
+                  {showWalletList && (
+                    <div ref={walletDropdownRef} className="absolute top-14 right-5 bg-gray-800 text-white rounded-lg w-64 p-4 shadow-lg">
+                      <h2 className="text-lg text-center font-bold mb-2">Connect Wallet</h2>
+                      <p className="text-sm text-center text-cyan-400 mb-4">List of wallets installed on device</p>
+                      {availableWallets.map((wallet) => (
+                        <button
+                          key={wallet.name}
+                          onClick={() => connectWallet(wallet.name)}
+                          className={`flex items-center w-full px-3 py-2 rounded-lg transition-colors ${connectedWallet === wallet ? "bg-gray-800" : "hover:bg-gray-700"}`}
+                        >
+                          <img src={wallet.icon} alt={`${wallet.name} logo`} className="w-6 h-6 mr-3 " />
+                          {wallet.name}
                         </button>
                       ))}
                     </div>
