@@ -41,7 +41,37 @@ function App() {
   const [walletAddress, setWalletAddress] = useState<string>('');
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [showWalletList, setShowWalletList] = useState<boolean>(false);
+  const [availableWallets, setAvailableWallets] = useState<any[]>([]);
   const webContainerInstanceRef = useRef<any>(null);
+  const walletDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Add this effect to fetch available wallets when component mounts
+  useEffect(() => {
+    const fetchWallets = async () => {
+      const wallets = await BrowserWallet.getAvailableWallets();
+      setAvailableWallets(wallets);
+    };
+    fetchWallets();
+  }, []);
+
+  // Modify the click outside listener
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showWalletList &&
+        walletDropdownRef.current &&
+        !walletDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowWalletList(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showWalletList]);
 
   // Debounced save of code to SessionStorage
   useEffect(() => {
@@ -122,32 +152,44 @@ function App() {
     sessionStorage.setItem('language', example.language);
   };
 
-  const connectWallet = async () => {
+  const connectWallet = async (walletName: string) => {
     try {
-      const walletList = await BrowserWallet.getAvailableWallets();
-      if (walletList.length > 0) {
-        const walletName = walletList[0].name;
-        const wallet = await BrowserWallet.enable(walletName);
-        console.log(walletName)
-        setConnectedWallet(wallet);
-
-        const usedAddresses = await wallet.getRewardAddresses();
-        const address = usedAddresses[0];
-        console.log(address);
-        setWalletAddress(address);
-
-        const balanceHex = await wallet.getBalance();
-        console.log(balanceHex[0].quantity)
-
-        const adaBalance = parseInt(balanceHex[0].quantity) / 1_000_000;
-        setWalletBalance(adaBalance);
-      } else {
-        alert('No browser wallets found. Please install a Cardano wallet extension.');
+      if (!walletName) {
+        throw new Error('No wallet name provided');
       }
+
+      console.log('Connecting to wallet:', walletName);
+
+      const wallet = await BrowserWallet.enable(walletName);
+      if (!wallet) {
+        throw new Error('Failed to enable wallet');
+      }
+
+      console.log('Wallet enabled:', wallet);
+      setConnectedWallet(wallet);
+
+      const usedAddresses = await wallet.getRewardAddresses();
+      if (!usedAddresses || usedAddresses.length === 0) {
+        throw new Error('No addresses found');
+      }
+
+      const address = usedAddresses[0];
+      console.log('Wallet address:', address);
+      setWalletAddress(address);
+
+      const balanceHex = await wallet.getBalance();
+      if (!balanceHex || balanceHex.length === 0) {
+        throw new Error('Failed to get balance');
+      }
+
+      console.log('Balance hex:', balanceHex[0].quantity);
+      const adaBalance = parseInt(balanceHex[0].quantity) / 1_000_000;
+      setWalletBalance(adaBalance);
+
     } catch (error) {
       console.error('Error connecting wallet:', error);
-      setErrorMessage('Failed to connect to wallet. Please try again.');
-      setTimeout(() => setErrorMessage(''), 2000);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to wallet. Please try again.');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   }
   const disconnectWallet = () => {
@@ -164,116 +206,156 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 py-4 px-6 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as 'javascript' | 'typescript')}
-              className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-            </select>
+      <header className="bg-gray-800 border-b border-gray-700 shadow-lg">
 
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                const selectedExample = examples.find((ex) => ex.title === e.target.value);
-                if (selectedExample) {
-                  handleLoadExample(selectedExample);
-                }
-              }}
-              className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
-            >
-              <option value="" disabled>
-                Load Example
-              </option>
-              {examples.map((example) => (
-                <option key={example.title} value={example.title}>
-                  {example.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleExecuteCode}
-              disabled={isLoading}
-              className={`${isLoading ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'
-                } text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2`}
-            >
-              <i className="fas fa-play"></i>
-              <span>{isLoading ? 'Running...' : 'Run'}</span>
-            </button>
-
-            <button
-              onClick={handleCopyCode}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium 
-                     transition-all duration-200 flex items-center space-x-2"
-            >
-              <i className="fas fa-copy"></i>
-              <span>Copy</span>
-            </button>
-
-            <button
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium 
-                     transition-all duration-200 flex items-center space-x-2"
-            >
-              <i className="fas fa-cog"></i>
-              <span>Settings</span>
-            </button>
-
-            {/* Add Connect Wallet */}
-            {connectedWallet ? (
-              <div
-                className="relative group"
-                onClick={handleCopyWalletAddress}
-              >
-                <div className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg cursor-pointer transition-colors duration-200">
-                  <i className="fas fa-wallet text-indigo-400"></i>
-                  <div className="text-sm">
-                    <div className="font-semibold text-white">
-                      {shortenAddress(walletAddress)}
+        {/* Top bar with wallet */}
+        <div className='border-b border-gray-700'>
+          <div className="max-w-7xl mx-auto px-6 py-2">
+            <div className="flex justify-end">
+              {/* Wallet Connection */}
+              {connectedWallet ? (
+                <div className="relative group">
+                  <div
+                    onClick={handleCopyWalletAddress}
+                    className="flex items-center space-x-3 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg cursor-pointer transition-all duration-200"
+                  >
+                    <i className="fas fa-wallet text-indigo-400"></i>
+                    <div className="flex flex-col">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-300">{shortenAddress(walletAddress)}</span>
+                        <i className="fas fa-copy text-xs text-gray-400"></i>
+                      </div>
+                      <span className="text-sm text-indigo-400">{walletBalance?.toFixed(2)} ADA</span>
                     </div>
-                    <div className="text-gray-300">{walletBalance?.toFixed(2)} ADA</div>
+                  </div>
+
+                  {/* Disconnect Dropdown */}
+                  <div className="absolute right-0 mt-2 w-48 py-2 bg-gray-800 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                    <button
+                      onClick={disconnectWallet}
+                      className="w-full px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center space-x-2"
+                    >
+                      <i className="fas fa-sign-out-alt"></i>
+                      <span>Disconnect Wallet</span>
+                    </button>
                   </div>
                 </div>
-                {/* Disconnect Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent triggering the copy function
-                    disconnectWallet();
-                  }}
-                  className="absolute top-0 right-0 mt-1 mr-1 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                >
-                  <i className="fas fa-times"></i>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={connectWallet}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium 
-                  transition-all duration-200 flex items-center space-x-2"
-              >
-                <i className="fas fa-wallet"></i>
-                <span>Connect Wallet</span>
-              </button>
-            )}
+              ) : (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowWalletList(!showWalletList)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium 
+                     transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <i className="fas fa-wallet"></i>
+                    <span>Connect Wallet</span>
+                  </button>
+
+                  {/* Wallet List Dropdown */}
+                  {showWalletList && (
+                    <div
+                      ref={walletDropdownRef}
+                      className="absolute right-0 mt-2 w-64 py-2 bg-cyan-900 rounded-lg shadow-xl z-50"
+                    >
+                      {availableWallets.map((wallet) => (
+                        <button
+                          key={wallet.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            connectWallet(wallet.name);
+                            setShowWalletList(false);
+                          }}
+                          className="w-full px-4 py-3 text-center hover:bg-gray-500 flex items-center space-x-3"
+                        >
+                          <img
+                            src={wallet.icon}
+                            alt={wallet.name}
+                            className="w-6 h-6 rounded-full"
+                          />
+                          <span className="text-sm font-bold text-gray-200">{wallet.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+
+        {/* Main toolbar */}
+        <div className='max-w-7xl mx-auto px-6 py-4'>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'javascript' | 'typescript')}
+                className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
+              >
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+              </select>
+
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  const selectedExample = examples.find((ex) => ex.title === e.target.value);
+                  if (selectedExample) {
+                    handleLoadExample(selectedExample);
+                  }
+                }}
+                className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
+              >
+                <option value="" disabled>
+                  Load Example
+                </option>
+                {examples.map((example) => (
+                  <option key={example.title} value={example.title}>
+                    {example.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleExecuteCode}
+                disabled={isLoading}
+                className={`${isLoading ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2`}
+              >
+                <i className="fas fa-play"></i>
+                <span>{isLoading ? 'Running...' : 'Run'}</span>
+              </button>
+
+              <button
+                onClick={handleCopyCode}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium 
+                     transition-all duration-200 flex items-center space-x-2"
+              >
+                <i className="fas fa-copy"></i>
+                <span>Copy</span>
+              </button>
+
+              <button
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium 
+                     transition-all duration-200 flex items-center space-x-2"
+              >
+                <i className="fas fa-cog"></i>
+                <span>Settings</span>
+              </button>
+
+            </div>
+          </div>
+        </div>
+        {/* Main toolbar */}
       </header>
 
-      {/* {errorMessage && (
-        <div className="p-4 bg-red-600 text-white">
-          <p>{errorMessage}</p>
-        </div>
-      )} */}
 
       {/* Body */}
       <main className="flex flex-1 h-[calc(100vh-8rem)] overflow-hidden">
