@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/components/Toolbar.tsx
 
 import React from 'react';
 import examples from '../data/examples';

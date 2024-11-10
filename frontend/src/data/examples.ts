@@ -1,5 +1,10 @@
-// Define this outside your App component or in a separate file
-const examples = [
+export interface Example {
+  title: string;
+  language: 'javascript' | 'typescript';
+  code: string;
+}
+
+const examples: Example[] = [
     {
       title: 'Hello World',
       language: 'javascript',

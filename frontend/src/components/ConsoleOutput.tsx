@@ -1,5 +1,3 @@
-// src/components/ConsoleOutput.tsx
-
 import React from 'react';
 
 interface ConsoleOutputProps {

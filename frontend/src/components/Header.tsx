@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/components/Header.tsx
 
 import React from 'react';
 import { BrowserWallet } from '@meshsdk/core';

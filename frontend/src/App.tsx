@@ -1,14 +1,25 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Resizable } from 're-resizable';
+
+// Import webcontainer
 import { getWebContainerInstance } from './webContainerInstance';
+
+// Import hooks
 import { useWallet } from './hooks/useWallet';
-import CodeEditor from './components/CodeEditor';
-import Footer from './components/Footer';
+
+// Import execution functions
 import { executeCode } from './execution/codeExecutor';
+
+// Import copy functions
 import { copyCode, copyWalletAddress } from './utils/copy';
-import examples from './data/examples';
+
+// Import components
 import Header from './components/Header';
+import Toolbar from './components/Toolbar';
+import CodeEditor from './components/CodeEditor';
+import ConsoleOutput from './components/ConsoleOutput';
+import Footer from './components/Footer';
 
 // Define global if necessary
 if (typeof global === 'undefined') {
@@ -33,13 +44,12 @@ function App() {
     return savedCode !== null ? savedCode : '';
   });
 
-  const [consoleOutput, setConsoleOutput] = useState<string>(''); // State for console output
+  const [consoleOutput, setConsoleOutput] = useState<string>(''); 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [executionStatus, setExecutionStatus] = useState<'success' | 'error' | null>(null);
   const [copySuccess, setCopySuccess] = useState<string>('');
   const [editorWidth, setEditorWidth] = useState<number>(window.innerWidth * 0.6);
   const webContainerInstanceRef = useRef<any>(null);
-  
 
   // Use the custom hook
   const {
@@ -56,7 +66,7 @@ function App() {
     setShowWalletList,
   } = useWallet();
 
-  
+
   // Debounced save of code to SessionStorage
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -94,6 +104,16 @@ function App() {
                 contents: '',
               },
             },
+            'package.json': {
+              file: {
+                contents: {
+                  "type": "module",
+                  "dependencies": {
+                    "@meshsdk/core": "^1.7.11",
+                  }
+                }
+              }
+            }
           };
 
           await webContainerInstance.mount(files);
@@ -114,27 +134,18 @@ function App() {
     };
   }, []);
 
-  const handleExecuteCode = async () => {
+  const handleExecuteCode = useCallback(async () => {
     setExecutionStatus(null);
     await executeCode(language, code, setConsoleOutput, setExecutionStatus);
-  };
+  }, [language, code]);
 
-  const handleCopyCode = async () => {
+  const handleCopyCode = useCallback(async () => {
     await copyCode(code, setCopySuccess);
-  };
+  }, [code]);
 
-  const handleCopyWalletAddress = async () => {
+  const handleCopyWalletAddress = useCallback(async () => {
     await copyWalletAddress(walletAddress, setCopySuccess);
-  };
-
-  const handleLoadExample = (example: any) => {
-    setCode(example.code);
-    setLanguage(example.language);
-    setConsoleOutput('');
-    setExecutionStatus(null);
-    sessionStorage.setItem('code', example.code);
-    sessionStorage.setItem('language', example.language);
-  };
+  }, [walletAddress]);
 
 
   return (
@@ -143,7 +154,7 @@ function App() {
       <header className="bg-gray-800 border-b border-gray-700 shadow-lg">
 
         {/* Top bar with wallet */}
-        <Header 
+        <Header
           connectedWallet={connectedWallet}
           walletAddress={walletAddress}
           walletBalance={walletBalance}
@@ -159,80 +170,23 @@ function App() {
 
 
         {/* Main toolbar */}
-        <div className='max-w-7xl mx-auto px-6 py-4'>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as 'javascript' | 'typescript')}
-                className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-              </select>
+        <Toolbar
+          language={language}
+          setLanguage={setLanguage}
+          setCode={setCode}
+          handleExecuteCode={handleExecuteCode}
+          handleCopyCode={handleCopyCode}
+          isLoading={isLoading}
+          setConsoleOutput={setConsoleOutput}
+          setExecutionStatus={setExecutionStatus}
+        />
 
-              <select
-                defaultValue=""
-                onChange={(e) => {
-                  const selectedExample = examples.find((ex) => ex.title === e.target.value);
-                  if (selectedExample) {
-                    handleLoadExample(selectedExample);
-                  }
-                }}
-                className="bg-gray-700 text-gray-100 px-4 py-2 rounded-lg border border-gray-600 
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                     transition-all duration-200 cursor-pointer hover:bg-gray-650"
-              >
-                <option value="" disabled>
-                  Load Example
-                </option>
-                {examples.map((example) => (
-                  <option key={example.title} value={example.title}>
-                    {example.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleExecuteCode}
-                disabled={isLoading}
-                className={`${isLoading ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'
-                  } text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2`}
-              >
-                <i className="fas fa-play"></i>
-                <span>{isLoading ? 'Running...' : 'Run'}</span>
-              </button>
-
-              <button
-                onClick={handleCopyCode}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium 
-                     transition-all duration-200 flex items-center space-x-2"
-              >
-                <i className="fas fa-copy"></i>
-                <span>Copy</span>
-              </button>
-
-              <button
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium 
-                     transition-all duration-200 flex items-center space-x-2"
-              >
-                <i className="fas fa-cog"></i>
-                <span>Settings</span>
-              </button>
-
-            </div>
-          </div>
-        </div>
-        {/* Main toolbar */}
       </header>
 
 
       {/* Body */}
       <main className="flex flex-1 h-[calc(100vh-8rem)] overflow-hidden">
+        {/* Code Editor */}
         <Resizable
           size={{ width: editorWidth, height: "100%" }}
           onResizeStop={(_e, _direction, _ref, d) => {
@@ -256,20 +210,8 @@ function App() {
         </Resizable>
 
         <div className="flex-1 bg-gray-800 p-4 overflow-hidden">
-          <div
-            className={`h-full rounded-lg p-4 transition-all duration-200 ${executionStatus === 'success'
-              ? 'bg-gray-900'
-              : executionStatus === 'error'
-                ? 'bg-red-900/20'
-                : 'bg-gray-900'
-              }`}
-          >
-            <h3 className="text-lg font-semibold mb-2 flex items-center">
-              <i className="fas fa-terminal mr-2"></i>
-              Console Output
-            </h3>
-            <pre className="whitespace-pre-wrap font-mono text-sm">{consoleOutput}</pre>
-          </div>
+          {/* Console Output */}
+          <ConsoleOutput consoleOutput={consoleOutput} executionStatus={executionStatus} />
         </div>
       </main>
 

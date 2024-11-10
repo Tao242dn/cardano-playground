@@ -1,5 +1,3 @@
-// src/hooks/useWallet.ts
-
 import { useState, useEffect, useRef } from 'react';
 import { BrowserWallet } from '@meshsdk/core';
 
